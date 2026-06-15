@@ -1,0 +1,21 @@
+[Unit]
+Description=packages.ubuntu.com - Archive synchronization job
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=ubuntu
+Group=ubuntu
+Environment=HOME=/home/ubuntu
+WorkingDirectory=/srv/packages.ubuntu.com
+ExecStart=/srv/packages.ubuntu.com/bin/daily
+# The first run downloads the archive indexes and can take a long time.
+TimeoutStartSec=infinity
+NoNewPrivileges=true
+PrivateTmp=yes
+ProtectClock=yes
+ProtectHostname=yes
+ProtectKernelModules=yes
+ProtectKernelTunables=yes
+RestrictSUIDSGID=yes

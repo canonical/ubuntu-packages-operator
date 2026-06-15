@@ -1,0 +1,81 @@
+name: ubuntu-packages
+type: charm
+title: Ubuntu Packages charm
+summary: Run the packages.ubuntu.com web service
+description: |
+  **Ubuntu Packages Operator** is a [charm](https://juju.is/charms-architecture)
+  that deploys the packages.ubuntu.com web service: an Apache2 + mod_perl
+  application that lets users browse and search the Ubuntu archive. The charm
+  installs the dependencies, checks out the application source, generates its
+  configuration, serves it through Apache and refreshes the package indexes on a
+  schedule.
+
+links:
+  website:
+    - https://charmhub.io/ubuntu-packages
+  issues:
+    - https://github.com/canonical/ubuntu-packages-operator/issues
+  source:
+    - https://github.com/canonical/ubuntu-packages-operator
+
+base: ubuntu@24.04
+platforms:
+  amd64:
+
+parts:
+  ubuntu-packages-charm:
+    source: .
+    plugin: uv
+    build-packages: [git]
+    build-snaps: [astral-uv]
+    override-build: |
+      craftctl default  # Run the default build steps.
+      git describe --always > $CRAFT_PART_INSTALL/version
+
+charm-libs:
+  - lib: traefik_k8s.ingress
+    version: "2"
+
+actions:
+  sync-now:
+    description: |
+      Trigger an immediate run of the daily archive synchronization job.
+      The first run downloads the archive indexes and can take a long time.
+
+requires:
+  ingress:
+    interface: ingress
+    limit: 1
+    optional: true
+
+config:
+  options:
+    sync_hours:
+      description: |
+        Comma-separated list of hours (local system time) at which the daily
+        archive synchronization job runs. Example: "3,9,15,21".
+      type: string
+      default: "3,9,15,21"
+    suites:
+      description: |
+        Space-separated list of Ubuntu suites to index, e.g.
+        "noble noble-updates noble-backports".
+      type: string
+      default: "jammy jammy-updates jammy-backports noble noble-updates noble-backports questing questing-updates questing-backports"
+    architectures:
+      description: |
+        Space-separated list of architectures to index, e.g. "amd64 arm64".
+      type: string
+      default: "i386 amd64 arm64 armhf ppc64el riscv64 s390x"
+    ftpsite:
+      description: URL of the primary Ubuntu archive mirror to fetch indexes from.
+      type: string
+      default: "http://archive.ubuntu.com/ubuntu"
+    security_ftpsite:
+      description: URL of the Ubuntu security archive mirror.
+      type: string
+      default: "http://archive.ubuntu.com/ubuntu"
+    debports_ftpsite:
+      description: URL of the Ubuntu ports archive mirror (non-primary architectures).
+      type: string
+      default: "http://ports.ubuntu.com"
