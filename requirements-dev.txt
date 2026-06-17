@@ -2,7 +2,7 @@
 #    uv pip compile --no-cache --all-extras pyproject.toml -o requirements-dev.txt
 annotated-types==0.7.0
     # via pydantic
-certifi==2026.5.20
+certifi==2026.6.17
     # via requests
 charmlibs-apt==1.0.0.post0
     # via ubuntu-packages-operator (pyproject.toml)
@@ -37,7 +37,7 @@ pluggy==1.6.0
     # via pytest
 pydantic==2.13.4
     # via ubuntu-packages-operator (pyproject.toml)
-pydantic-core==2.46.4
+pydantic-core==2.47.0
     # via pydantic
 pygments==2.20.0
     # via pytest
