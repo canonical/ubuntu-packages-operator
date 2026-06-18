@@ -119,7 +119,11 @@ class UbuntuPackagesCharm(ops.CharmBase):
         self.unit.status = ops.ActiveStatus()
 
     def _on_config_changed(self, event: ops.ConfigChangedEvent):
-        """Apply configuration changes to the application and the schedule."""
+        """Apply configuration changes to the application and the schedule.
+
+        Configuration changes trigger an immediate sync to pick up suite/architecture
+        changes and regenerate index pages.
+        """
         logger.debug("config changed event")
         self.unit.status = ops.MaintenanceStatus("Updating configuration")
         try:
@@ -135,6 +139,14 @@ class UbuntuPackagesCharm(ops.CharmBase):
                 "Failed to update configuration. Check `juju debug-log` for details."
             )
             return
+
+        # Always trigger sync on config change to ensure index pages reflect current config.
+        try:
+            logger.info("Configuration changed; triggering immediate sync")
+            self._packages.trigger_sync()
+        except CalledProcessError as e:
+            logger.warning("Failed to trigger sync after config change: %s", e)
+
         self.unit.status = ops.ActiveStatus()
 
     def _on_sync_now(self, event: ops.ActionEvent):

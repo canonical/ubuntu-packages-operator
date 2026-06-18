@@ -151,9 +151,10 @@ def test_start_event_blocks_charm_when_service_start_fails(start_mock, ctx, base
     assert out.opened_ports == frozenset()
 
 
+@patch("charm.PackagesManager.trigger_sync")
 @patch("charm.PackagesManager.configure")
 @patch("charm.PackagesManager.configure_schedule")
-def test_config_changed_event_applies_configuration(configure_schedule_mock, configure_mock, ctx):
+def test_config_changed_event_applies_configuration(configure_schedule_mock, configure_mock, trigger_sync_mock, ctx):
     state_in = State(leader=True, config={"sync_hours": "6"})
 
     out = ctx.run(ctx.on.config_changed(), state_in)
@@ -161,12 +162,14 @@ def test_config_changed_event_applies_configuration(configure_schedule_mock, con
     assert out.unit_status == ActiveStatus()
     configure_mock.assert_called_once()
     configure_schedule_mock.assert_called_once_with("6")
+    trigger_sync_mock.assert_called_once()
 
 
+@patch("charm.PackagesManager.trigger_sync")
 @patch("charm.PackagesManager.configure")
 @patch("charm.PackagesManager.configure_schedule")
 def test_config_changed_event_blocks_charm_on_invalid_schedule(
-    configure_schedule_mock, configure_mock, ctx
+    configure_schedule_mock, configure_mock, trigger_sync_mock, ctx
 ):
     state_in = State(leader=True, config={"sync_hours": "25"})
     configure_schedule_mock.side_effect = ValueError("invalid")
@@ -176,6 +179,22 @@ def test_config_changed_event_blocks_charm_on_invalid_schedule(
     assert out.unit_status == BlockedStatus(
         "Invalid sync hours. Use comma-separated integers in [0,23], e.g. '3,9,15,21'."
     )
+
+
+@patch("charm.PackagesManager.trigger_sync")
+@patch("charm.PackagesManager.configure")
+@patch("charm.PackagesManager.configure_schedule")
+def test_config_changed_event_triggers_sync(
+    configure_schedule_mock, configure_mock, trigger_sync_mock, ctx
+):
+    state_in = State(leader=True, config={"suites": "resolute"})
+
+    out = ctx.run(ctx.on.config_changed(), state_in)
+
+    assert out.unit_status == ActiveStatus()
+    configure_mock.assert_called_once()
+    configure_schedule_mock.assert_called_once()
+    trigger_sync_mock.assert_called_once()
 
 
 @patch("charm.PackagesManager.run_sync")
