@@ -250,6 +250,46 @@ class PackagesManager:
         ]
         return "\n".join(lines)
 
+    def _patch_homepage_template(self):
+        """Make homepage template honor runtime suites from backend context.
+
+        translate_static_page already passes all_suites from @SUITES, but the
+        upstream homepage template overwrites that with a hardcoded list. Keep
+        only a config-driven current_release default.
+        """
+        homepage_template = TOPDIR / "templates" / "html" / "homepage.tmpl"
+        if not homepage_template.exists():
+            logger.warning("Homepage template not found at %s", homepage_template)
+            return
+
+        template = homepage_template.read_text(encoding="utf-8")
+        updated_lines = []
+        skipping_all_suites = False
+
+        for line in template.splitlines(keepends=True):
+            stripped = line.strip()
+
+            if stripped.startswith("all_suites = ["):
+                skipping_all_suites = True
+                continue
+
+            if skipping_all_suites:
+                if stripped.endswith("]"):
+                    skipping_all_suites = False
+                continue
+
+            if stripped.startswith("current_release = "):
+                updated_lines.append("    current_release = all_suites.0\n")
+                continue
+
+            updated_lines.append(line)
+
+        updated = "".join(updated_lines)
+
+        if updated != template:
+            homepage_template.write_text(updated, encoding="utf-8")
+            shutil.chown(homepage_template, RUN_USER, RUN_GROUP)
+
     def configure(self, options: dict[str, str]):
         """Apply charm configuration to the generated application config."""
         config_path = TOPDIR / "config.sh"
@@ -263,6 +303,7 @@ class PackagesManager:
         content += self._render_config_overrides(options)
         config_path.write_text(content, encoding="utf-8")
         shutil.chown(config_path, RUN_USER, RUN_GROUP)
+        self._patch_homepage_template()
 
     def _parse_sync_hours(self, sync_hours: str) -> list[int]:
         """Parse comma-separated hour values in the range [0, 23]."""

@@ -171,6 +171,54 @@ def test_configure_replaces_previous_override_block(monkeypatch):
     assert 'suites="jammy"' in written
 
 
+def test_configure_updates_homepage_template_suite_list(monkeypatch):
+    config_path = "/srv/packages.ubuntu.com/config.sh"
+    homepage_path = "/srv/packages.ubuntu.com/templates/html/homepage.tmpl"
+
+    files = {
+        config_path: "topdir=/srv/packages.ubuntu.com\n",
+        homepage_path: (
+            "[%\n"
+            "    all_suites = [ 'jammy', 'jammy-updates', 'jammy-backports',\n"
+            "\t\t   'noble', 'noble-updates', 'noble-backports',\n"
+            "\t\t   'questing', 'questing-updates', 'questing-backports',\n"
+            "\t\t   'resolute', 'resolute-updates', 'resolute-backports',\n"
+            "\t\t   'stonking' ]\n"
+            "    current_release = 'resolute'\n"
+            "-%]\n"
+        ),
+    }
+
+    def fake_read_text(self, encoding=None):
+        return files[str(self)]
+
+    def fake_write_text(self, text, encoding=None):
+        files[str(self)] = text
+
+    def fake_exists(self):
+        return str(self) == homepage_path
+
+    monkeypatch.setattr(packages.Path, "read_text", fake_read_text)
+    monkeypatch.setattr(packages.Path, "write_text", fake_write_text)
+    monkeypatch.setattr(packages.Path, "exists", fake_exists)
+    monkeypatch.setattr(packages.shutil, "chown", lambda *a, **k: None)
+
+    manager = PackagesManager()
+    manager.configure(
+        {
+            "suites": "resolute",
+            "architectures": "amd64",
+            "ftpsite": "http://mirror/ubuntu",
+            "security_ftpsite": "http://mirror/ubuntu",
+            "debports_ftpsite": "http://ports",
+        }
+    )
+
+    assert "all_suites = [" not in files[homepage_path]
+    assert "current_release = all_suites.0" in files[homepage_path]
+    assert "jammy-updates" not in files[homepage_path]
+
+
 def test_parse_sync_hours_rejects_out_of_range():
     manager = PackagesManager()
     with pytest.raises(ValueError):
