@@ -227,7 +227,7 @@ class PackagesManager:
         self._fix_ownership()
 
     def _render_config_overrides(self, options: dict[str, str]) -> str:
-        """Build the bash override block appended to the generated config.sh."""
+        """Build the shell override block appended to the generated config.sh."""
         suites = " ".join(options["suites"].split())
         architectures = " ".join(options["architectures"].split())
         lines = [
@@ -240,7 +240,8 @@ class PackagesManager:
             f'suites="{suites}"',
             'dists="$suites"',
             "for _suite in $suites; do",
-            '    eval "arch_${_suite//-/_}=\\"$architectures\\""',
+            '    _arch_var="arch_$(echo $_suite | sed \'s/-/_/g\')"',
+            '    eval "${_arch_var}=\\"$architectures\\""',
             "done",
             "",
         ]
