@@ -58,14 +58,14 @@ juju run ubuntu-packages/0 sync-now
 
 ## Configuration
 
-| Option              | Default                              | Description                                            |
-| ------------------- | ------------------------------------ | ------------------------------------------------------ |
-| `sync_hours`        | `3,9,15,21`                          | Hours of day at which the daily sync runs.             |
-| `suites`            | jammy/noble/questing series          | Space-separated suites to index.                       |
-| `architectures`     | `i386 amd64 arm64 armhf ppc64el ...` | Space-separated architectures to index.                |
-| `ftpsite`           | `http://archive.ubuntu.com/ubuntu`   | Primary archive mirror.                                |
-| `security_ftpsite`  | `http://archive.ubuntu.com/ubuntu`   | Security archive mirror.                               |
-| `debports_ftpsite`  | `http://ports.ubuntu.com`            | Ports archive mirror.                                  |
+| Option             | Default                                          | Description                                 |
+| ------------------ | ------------------------------------------------ | ------------------------------------------- |
+| `sync_hours`       | `3,9,15,21`                                      | Hours of day at which the daily sync runs. |
+| `suites`           | `jammy/noble/questing/resolute/stonking series` | Space-separated suites to index.            |
+| `architectures`    | `i386 amd64 arm64 armhf ppc64el ...`            | Space-separated architectures to index.     |
+| `ftpsite`          | `http://archive.ubuntu.com/ubuntu`              | Primary archive mirror.                     |
+| `security_ftpsite` | `http://archive.ubuntu.com/ubuntu`              | Security archive mirror.                    |
+| `debports_ftpsite` | `http://ports.ubuntu.com`                       | Ports archive mirror.                       |
 
 For example, to index only the noble series:
 

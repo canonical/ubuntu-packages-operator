@@ -61,7 +61,7 @@ config:
         Space-separated list of Ubuntu suites to index, e.g.
         "noble noble-updates noble-backports".
       type: string
-      default: "jammy jammy-updates jammy-backports noble noble-updates noble-backports questing questing-updates questing-backports"
+      default: "jammy jammy-updates jammy-backports noble noble-updates noble-backports questing questing-updates questing-backports resolute resolute-updates resolute-backports stonking"
     architectures:
       description: |
         Space-separated list of architectures to index, e.g. "amd64 arm64".
