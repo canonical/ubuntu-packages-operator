@@ -257,6 +257,32 @@ class PackagesManager:
             shutil.chown(cache_dir, APACHE_USER, APACHE_USER)
             cache_dir.chmod(0o2770)
 
+    def _install_debtags_vocabulary(self):
+        """Install the debtags vocabulary file from the bundled copy if not present.
+
+        The upstream cron.d/110debtags downloads a debtags vocabulary from alioth,
+        which is decommissioned and returns 403. The download uses wget -N, which
+        leaves an existing local file untouched on failure, so as long as a vocabulary
+        file is present on disk, the daily sync continues to work by parsing the
+        previously-downloaded copy.
+
+        Fresh installs have no vocabulary, so we install one from the bundled copy in
+        src/vocabulary. Subsequent sync runs will update it automatically if the
+        upstream source ever becomes available again.
+
+        TODO: Remove this entire method and the self._install_debtags_vocabulary()
+        call in install() once upstream fixes debtags fetching/parsing for fresh
+        deployments (no reliance on a pre-existing local vocabulary file).
+        """
+        vocab_dest = TOPDIR / "files" / "debtags" / "vocabulary"
+        if vocab_dest.exists():
+            logger.debug("debtags vocabulary already present, skipping install")
+            return
+        logger.debug("Installing debtags vocabulary from bundled copy")
+        vocab_dest.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy("src/vocabulary", vocab_dest)
+        shutil.chown(vocab_dest, RUN_USER, RUN_GROUP)
+
     def install(self):
         """Install dependencies, check out the source and configure Apache."""
         self._install_packages()
@@ -265,6 +291,7 @@ class PackagesManager:
         # setup-site can regenerate cron scripts, so patch after it runs.
         self._patch_cron_scripts()
         self._ensure_runtime_dirs()
+        self._install_debtags_vocabulary()
         self._link_keyring()
         self._setup_apache()
         self._fix_ownership()
