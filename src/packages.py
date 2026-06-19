@@ -150,6 +150,38 @@ class PackagesManager:
                 ["git", "clone", "--branch", REPO_BRANCH, REPO_URL, str(TOPDIR)],
             )
 
+    def _patch_cron_scripts(self):
+        """Patch cron scripts to remove hardcoded proxy settings.
+
+        The upstream cron.d/110debtags hardcodes http_proxy=http://squid.external:3128/
+        which breaks deployments without that proxy. We remove the line entirely;
+        the systemd service unit injects proxy env vars when configured via Juju.
+
+        TODO: Remove this entire method and the self._patch_cron_scripts() call in
+        install() once the upstream MR is merged into the ubuntu-master branch and
+        cron.d/110debtags no longer contains the line:
+            export http_proxy=http://squid.external:3128/
+        Upstream MR: https://salsa.debian.org/webmaster-team/packages/-/merge_requests/48
+        """
+        debtags_cron = TOPDIR / "cron.d" / "110debtags"
+        if not debtags_cron.exists():
+            logger.warning("cron.d/110debtags not found, skipping patch")
+            return
+
+        content = debtags_cron.read_text(encoding="utf-8")
+
+        # Remove the hardcoded proxy line entirely. The systemd service unit injects
+        # proxy env vars when configured via Juju, so wget will pick those up. Without
+        # a proxy configured, wget should connect directly.
+        old_line = "export http_proxy=http://squid.external:3128/\n"
+
+        if old_line in content:
+            logger.debug("Patching cron.d/110debtags: removing hardcoded squid proxy")
+            content = content.replace(old_line, "")
+            debtags_cron.write_text(content, encoding="utf-8")
+        else:
+            logger.debug("cron.d/110debtags hardcoded proxy line not found (may have changed upstream)")
+
     def _run_setup_site(self):
         """Generate the application configuration via the upstream helper.
 
@@ -220,6 +252,7 @@ class PackagesManager:
         """Install dependencies, check out the source and configure Apache."""
         self._install_packages()
         self._clone_or_update_source()
+        self._patch_cron_scripts()
         self._run_setup_site()
         self._ensure_runtime_dirs()
         self._link_keyring()
@@ -239,9 +272,6 @@ class PackagesManager:
             f'architectures="{architectures}"',
             f'suites="{suites}"',
             'dists="$suites"',
-            "# Override upstream hardcoded proxies (cron.d scripts may set their own).",
-            'http_proxy="${http_proxy:-}"',
-            'https_proxy="${https_proxy:-}"',
             "for _suite in $suites; do",
             '    _arch_var="arch_$(echo $_suite | sed \'s/-/_/g\')"',
             '    eval "${_arch_var}=\\"$architectures\\""',

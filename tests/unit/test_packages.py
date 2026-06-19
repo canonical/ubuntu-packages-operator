@@ -266,3 +266,25 @@ def test_trigger_sync_starts_service_async(monkeypatch):
     manager.trigger_sync()
 
     assert ("packages-daily.service", "--no-block") in starts
+
+
+def test_patch_cron_scripts_removes_hardcoded_proxy(tmp_path, monkeypatch):
+    # If this test fails because old_line is not found in the script, the upstream
+    # fix has landed and _patch_cron_scripts() can be removed from packages.py.
+    monkeypatch.setattr(packages, "TOPDIR", tmp_path)
+    cron_dir = tmp_path / "cron.d"
+    cron_dir.mkdir()
+    debtags_cron = cron_dir / "110debtags"
+    debtags_cron.write_text(
+        "#! /bin/bash\n"
+        ". `dirname $0`/../config.sh\n"
+        "export http_proxy=http://squid.external:3128/\n"
+        "$wget_cmd -N http://debtags.alioth.debian.org/tags/vocabulary.gz\n"
+    )
+
+    manager = PackagesManager()
+    manager._patch_cron_scripts()
+
+    result = debtags_cron.read_text()
+    assert "squid.external" not in result
+    assert "$wget_cmd" in result  # rest of script is intact
