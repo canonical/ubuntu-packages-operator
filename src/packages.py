@@ -11,6 +11,7 @@ refreshing the package indexes on a schedule via a systemd timer.
 
 import logging
 import os
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -170,17 +171,25 @@ class PackagesManager:
 
         content = debtags_cron.read_text(encoding="utf-8")
 
-        # Remove the hardcoded proxy line entirely. The systemd service unit injects
-        # proxy env vars when configured via Juju, so wget will pick those up. Without
-        # a proxy configured, wget should connect directly.
-        old_line = "export http_proxy=http://squid.external:3128/\n"
+        # Remove the hardcoded proxy line entirely. Match common formatting variants
+        # (leading/trailing spaces, CRLF/newline differences) so the patch remains
+        # effective across upstream changes.
+        patched_content, replacements = re.subn(
+            r"(?m)^\s*export\s+http_proxy=http://squid\.external:3128/\s*(?:\r?\n|$)",
+            "",
+            content,
+        )
 
-        if old_line in content:
-            logger.debug("Patching cron.d/110debtags: removing hardcoded squid proxy")
-            content = content.replace(old_line, "")
-            debtags_cron.write_text(content, encoding="utf-8")
+        if replacements:
+            logger.debug(
+                "Patching cron.d/110debtags: removed %d hardcoded squid proxy line(s)",
+                replacements,
+            )
+            debtags_cron.write_text(patched_content, encoding="utf-8")
         else:
-            logger.debug("cron.d/110debtags hardcoded proxy line not found (may have changed upstream)")
+            logger.debug(
+                "cron.d/110debtags hardcoded proxy line not found (may have changed upstream)"
+            )
 
     def _run_setup_site(self):
         """Generate the application configuration via the upstream helper.
@@ -366,8 +375,10 @@ class PackagesManager:
 
     def trigger_sync(self):
         """Trigger an archive synchronization run without blocking."""
+        self._patch_cron_scripts()
         systemd.service_start(f"{SERVICE}.service", "--no-block")
 
     def run_sync(self):
         """Trigger a blocking archive synchronization run."""
+        self._patch_cron_scripts()
         systemd.service_start(f"{SERVICE}.service")

@@ -113,6 +113,54 @@ def test_clone_or_update_source_updates_when_present(monkeypatch):
     assert ["git", "reset", "--hard", f"origin/{packages.REPO_BRANCH}"] in runs
 
 
+def test_patch_cron_scripts_removes_hardcoded_proxy_line(monkeypatch):
+    path = packages.TOPDIR / "cron.d" / "110debtags"
+    stored = {
+        "text": (
+            "#! /bin/bash\n"
+            "\n"
+            "export http_proxy=http://squid.external:3128/\n"
+            "$wget_cmd -N http://debtags.alioth.debian.org/tags/vocabulary.gz\n"
+        )
+    }
+
+    monkeypatch.setattr(packages.Path, "exists", lambda self: self == path)
+    monkeypatch.setattr(packages.Path, "read_text", lambda self, encoding=None: stored["text"])
+    monkeypatch.setattr(
+        packages.Path,
+        "write_text",
+        lambda self, text, encoding=None: stored.update(text=text),
+    )
+
+    manager = PackagesManager()
+    manager._patch_cron_scripts()
+
+    assert "squid.external:3128" not in stored["text"]
+
+
+def test_patch_cron_scripts_removes_proxy_line_with_spaces_and_no_newline(monkeypatch):
+    path = packages.TOPDIR / "cron.d" / "110debtags"
+    stored = {
+        "text": (
+            "#! /bin/bash\n"
+            "  export   http_proxy=http://squid.external:3128/   "
+        )
+    }
+
+    monkeypatch.setattr(packages.Path, "exists", lambda self: self == path)
+    monkeypatch.setattr(packages.Path, "read_text", lambda self, encoding=None: stored["text"])
+    monkeypatch.setattr(
+        packages.Path,
+        "write_text",
+        lambda self, text, encoding=None: stored.update(text=text),
+    )
+
+    manager = PackagesManager()
+    manager._patch_cron_scripts()
+
+    assert "squid.external:3128" not in stored["text"]
+
+
 def test_configure_appends_override_block(monkeypatch):
     stored = {"text": "topdir=/srv/packages.ubuntu.com\nftpsite=http://upstream\n"}
 
@@ -253,20 +301,26 @@ def test_start_restarts_apache(monkeypatch):
 def test_run_sync_starts_service_blocking(monkeypatch):
     starts = []
     monkeypatch.setattr(packages.systemd, "service_start", lambda *args: starts.append(args))
+    patched = []
+    monkeypatch.setattr(PackagesManager, "_patch_cron_scripts", lambda self: patched.append(True))
 
     manager = PackagesManager()
     manager.run_sync()
 
+    assert patched == [True]
     assert ("packages-daily.service",) in starts
 
 
 def test_trigger_sync_starts_service_async(monkeypatch):
     starts = []
     monkeypatch.setattr(packages.systemd, "service_start", lambda *args: starts.append(args))
+    patched = []
+    monkeypatch.setattr(PackagesManager, "_patch_cron_scripts", lambda self: patched.append(True))
 
     manager = PackagesManager()
     manager.trigger_sync()
 
+    assert patched == [True]
     assert ("packages-daily.service", "--no-block") in starts
 
 
