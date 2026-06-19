@@ -252,8 +252,9 @@ class PackagesManager:
         """Install dependencies, check out the source and configure Apache."""
         self._install_packages()
         self._clone_or_update_source()
-        self._patch_cron_scripts()
         self._run_setup_site()
+        # setup-site can regenerate cron scripts, so patch after it runs.
+        self._patch_cron_scripts()
         self._ensure_runtime_dirs()
         self._link_keyring()
         self._setup_apache()
