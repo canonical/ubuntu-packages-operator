@@ -27,21 +27,16 @@ serves it through Apache and refreshes the package indexes on a schedule.
 
 ## Requirements
 
-The full archive index is large. Deploy onto a unit sized accordingly:
+The deployment requirements have been observed to be the following:
 
-```bash
-juju deploy ./ubuntu-packages_amd64.charm \
-  --constraints "cpu-cores=2 mem=16G root-disk=1T"
-```
-
-The first synchronization downloads roughly a gigabyte of archive indexes and
-builds the search databases; expect it to take a while. It is triggered at
-install time in background and can also be re-run manually.
+- Configured releases: Jammy Noble Questing Resolute Stonking, architectures: i386 amd64 arm64 armhf ppc64el riscv64 s390x
+- Disk space used in the `/srv` folder: `145GiB`
+- Stats from the systemd service, on a 8 cores VM: `packages-daily.service: Consumed 2h 15min 36.203s CPU time, 38.4M memory peak, 0B memory swap peak.`
 
 ## Basic usage
 
 ```bash
-juju deploy ./ubuntu-packages_amd64.charm --constraints "cpu-cores=2 mem=16G root-disk=1T"
+juju deploy ./ubuntu-packages_amd64.charm --constraints "cpu-cores=8 mem=16G root-disk=250G"
 ```
 
 If an ingress controller is present, relate it to the charm:
