@@ -310,7 +310,7 @@ class PackagesManager:
             f'suites="{suites}"',
             'dists="$suites"',
             "for _suite in $suites; do",
-            '    _arch_var="arch_$(echo $_suite | sed \'s/-/_/g\')"',
+            "    _arch_var=\"arch_$(echo $_suite | sed 's/-/_/g')\"",
             '    eval "${_arch_var}=\\"$architectures\\""',
             "done",
             "",

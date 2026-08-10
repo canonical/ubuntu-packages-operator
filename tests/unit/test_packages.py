@@ -142,12 +142,7 @@ def test_patch_cron_scripts_removes_hardcoded_proxy_line(monkeypatch):
 
 def test_patch_cron_scripts_removes_proxy_line_with_spaces_and_no_newline(monkeypatch):
     path = packages.TOPDIR / "cron.d" / "110debtags"
-    stored = {
-        "text": (
-            "#! /bin/bash\n"
-            "  export   http_proxy=http://squid.external:3128/   "
-        )
-    }
+    stored = {"text": ("#! /bin/bash\n  export   http_proxy=http://squid.external:3128/   ")}
 
     monkeypatch.setattr(packages.Path, "exists", lambda self: self == path)
     monkeypatch.setattr(packages.Path, "read_text", lambda self, encoding=None: stored["text"])
@@ -324,5 +319,3 @@ def test_trigger_sync_starts_service_async(monkeypatch):
 
     assert patched == [True]
     assert ("packages-daily.service", "--no-block") in starts
-
-

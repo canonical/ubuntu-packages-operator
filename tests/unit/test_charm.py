@@ -154,7 +154,9 @@ def test_start_event_blocks_charm_when_service_start_fails(start_mock, ctx, base
 @patch("charm.PackagesManager.trigger_sync")
 @patch("charm.PackagesManager.configure")
 @patch("charm.PackagesManager.configure_schedule")
-def test_config_changed_event_applies_configuration(configure_schedule_mock, configure_mock, trigger_sync_mock, ctx):
+def test_config_changed_event_applies_configuration(
+    configure_schedule_mock, configure_mock, trigger_sync_mock, ctx
+):
     state_in = State(leader=True, config={"sync_hours": "6"})
 
     out = ctx.run(ctx.on.config_changed(), state_in)
