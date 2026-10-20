@@ -126,8 +126,11 @@ def test_clone_or_update_source_updates_when_present(monkeypatch):
     manager = PackagesManager()
     manager._clone_or_update_source()
 
-    assert ["git", "fetch", "origin", packages.REPO_BRANCH] in runs
-    assert ["git", "reset", "--hard", f"origin/{packages.REPO_BRANCH}"] in runs
+    git = ["git", "-c", f"safe.directory={packages.TOPDIR}"]
+    assert runs == [
+        [*git, "fetch", "origin", packages.REPO_BRANCH],
+        [*git, "reset", "--hard", f"origin/{packages.REPO_BRANCH}"],
+    ]
 
 
 def test_patch_cron_scripts_removes_hardcoded_proxy_line(monkeypatch):

@@ -147,8 +147,11 @@ class PackagesManager:
         """Clone the application source, or fast-forward an existing checkout."""
         if (TOPDIR / ".git").is_dir():
             logger.debug("Updating existing checkout in %s", TOPDIR)
-            self._run(["git", "fetch", "origin", REPO_BRANCH], cwd=TOPDIR)
-            self._run(["git", "reset", "--hard", f"origin/{REPO_BRANCH}"], cwd=TOPDIR)
+            # The checkout is owned by RUN_USER but hooks run as root, so git's
+            # ownership check would otherwise refuse to operate on it.
+            git = ["git", "-c", f"safe.directory={TOPDIR}"]
+            self._run([*git, "fetch", "origin", REPO_BRANCH], cwd=TOPDIR)
+            self._run([*git, "reset", "--hard", f"origin/{REPO_BRANCH}"], cwd=TOPDIR)
         else:
             logger.debug("Cloning %s into %s", REPO_URL, TOPDIR)
             TOPDIR.parent.mkdir(parents=True, exist_ok=True)
