@@ -9,10 +9,12 @@ from unittest.mock import patch
 import pytest
 from charmlibs.apt import PackageError, PackageNotFoundError
 from ops.testing import (
+    ActionFailed,
     ActiveStatus,
     BlockedStatus,
     Context,
     State,
+    StoredState,
     TCPPort,
 )
 
@@ -27,6 +29,25 @@ def ctx():
 @pytest.fixture
 def base_state():
     return State(leader=True)
+
+
+@pytest.fixture
+def setup_failed_state():
+    return State(
+        leader=True,
+        stored_states={
+            StoredState(
+                name="_stored",
+                owner_path="UbuntuPackagesCharm",
+                content={"setup_failed": True},
+            )
+        },
+    )
+
+
+SETUP_FAILED_STATUS = BlockedStatus(
+    "Failed to set up the environment. Check `juju debug-log` for details."
+)
 
 
 @patch("charm.PackagesManager.trigger_sync")
@@ -217,3 +238,74 @@ def test_sync_now_action_sets_status_message_when_run_fails(run_sync_mock, ctx, 
     assert out.unit_status == ActiveStatus(
         "Failed to run synchronization. Check `juju debug-log` for details."
     )
+
+
+@patch("charm.PackagesManager.install")
+def test_upgrade_charm_failure_is_remembered(install_mock, ctx, base_state):
+    install_mock.side_effect = CalledProcessError(128, "git")
+
+    out = ctx.run(ctx.on.upgrade_charm(), base_state)
+
+    assert out.unit_status == SETUP_FAILED_STATUS
+    stored = out.get_stored_state("_stored", owner_path="UbuntuPackagesCharm")
+    assert stored.content["setup_failed"] is True
+
+
+@patch("charm.PackagesManager.trigger_sync")
+@patch("charm.PackagesManager.configure")
+@patch("charm.PackagesManager.configure_schedule")
+@patch("charm.PackagesManager.install")
+def test_config_changed_stays_blocked_when_setup_retry_fails(
+    install_mock,
+    configure_schedule_mock,
+    configure_mock,
+    trigger_sync_mock,
+    ctx,
+    setup_failed_state,
+):
+    install_mock.side_effect = CalledProcessError(128, "git")
+
+    out = ctx.run(ctx.on.config_changed(), setup_failed_state)
+
+    assert out.unit_status == SETUP_FAILED_STATUS
+    install_mock.assert_called_once()
+    trigger_sync_mock.assert_not_called()
+
+
+@patch("charm.PackagesManager.trigger_sync")
+@patch("charm.PackagesManager.setup_systemd_units")
+@patch("charm.PackagesManager.configure")
+@patch("charm.PackagesManager.configure_schedule")
+@patch("charm.PackagesManager.install")
+def test_config_changed_recovers_when_setup_retry_succeeds(
+    install_mock,
+    configure_schedule_mock,
+    configure_mock,
+    setup_units_mock,
+    trigger_sync_mock,
+    ctx,
+    setup_failed_state,
+):
+    out = ctx.run(ctx.on.config_changed(), setup_failed_state)
+
+    assert out.unit_status == ActiveStatus()
+    stored = out.get_stored_state("_stored", owner_path="UbuntuPackagesCharm")
+    assert stored.content["setup_failed"] is False
+    install_mock.assert_called_once()
+    trigger_sync_mock.assert_called_once()
+
+
+@patch("charm.PackagesManager.start")
+def test_start_event_stays_blocked_after_setup_failure(start_mock, ctx, setup_failed_state):
+    out = ctx.run(ctx.on.start(), setup_failed_state)
+
+    assert out.unit_status == SETUP_FAILED_STATUS
+    assert out.opened_ports == {TCPPort(port=80, protocol="tcp")}
+
+
+@patch("charm.PackagesManager.run_sync")
+def test_sync_now_action_fails_after_setup_failure(run_sync_mock, ctx, setup_failed_state):
+    with pytest.raises(ActionFailed):
+        ctx.run(ctx.on.action("sync-now"), setup_failed_state)
+
+    run_sync_mock.assert_not_called()

@@ -18,13 +18,19 @@ from packages import DEFAULT_SYNC_HOURS, PackagesManager, SetupSiteError
 logger = logging.getLogger(__name__)
 
 PORT = 80
+SETUP_FAILED_MESSAGE = "Failed to set up the environment. Check `juju debug-log` for details."
 
 
 class UbuntuPackagesCharm(ops.CharmBase):
     """Charmed Operator for the packages.ubuntu.com web service."""
 
+    _stored = ops.StoredState()
+
     def __init__(self, framework: ops.Framework):
         super().__init__(framework)
+        # Remembers a failed install/upgrade so later hooks don't report the
+        # unit as active while the workload is only partially set up.
+        self._stored.set_default(setup_failed=False)
 
         self.ingress = IngressRequirer(self, port=PORT, strip_prefix=True, relation_name="ingress")
 
@@ -77,12 +83,19 @@ class UbuntuPackagesCharm(ops.CharmBase):
             shutil.Error,
         ) as e:
             logger.warning("Failed to set up the environment: %s", e)
-            self.unit.status = ops.BlockedStatus(
-                "Failed to set up the environment. Check `juju debug-log` for details."
-            )
+            self._stored.setup_failed = True
+            self.unit.status = ops.BlockedStatus(SETUP_FAILED_MESSAGE)
             return False
 
+        self._stored.setup_failed = False
         return True
+
+    def _set_active_unless_setup_failed(self):
+        """Set ActiveStatus, unless a previous setup failure is still unresolved."""
+        if self._stored.setup_failed:
+            self.unit.status = ops.BlockedStatus(SETUP_FAILED_MESSAGE)
+        else:
+            self.unit.status = ops.ActiveStatus()
 
     def _on_install(self, event: ops.InstallEvent):
         """Handle install events."""
@@ -116,15 +129,22 @@ class UbuntuPackagesCharm(ops.CharmBase):
             )
             return
         self.unit.set_ports(PORT)
-        self.unit.status = ops.ActiveStatus()
+        self._set_active_unless_setup_failed()
 
     def _on_config_changed(self, event: ops.ConfigChangedEvent):
         """Apply configuration changes to the application and the schedule.
 
         Configuration changes trigger an immediate sync to pick up suite/architecture
-        changes and regenerate index pages.
+        changes and regenerate index pages. If a previous install or upgrade failed,
+        the full setup is retried first, so touching the config is a way to recover.
         """
         logger.debug("config changed event")
+        if self._stored.setup_failed:
+            logger.info("Previous environment setup failed; retrying")
+            self.unit.status = ops.MaintenanceStatus("Retrying environment setup")
+            if not self._setup_environment():
+                return
+
         self.unit.status = ops.MaintenanceStatus("Updating configuration")
         try:
             self._packages.configure(self._config_options())
@@ -151,6 +171,10 @@ class UbuntuPackagesCharm(ops.CharmBase):
 
     def _on_sync_now(self, event: ops.ActionEvent):
         """Trigger an immediate archive synchronization run."""
+        if self._stored.setup_failed:
+            event.fail("Environment setup failed; fix it before running a sync.")
+            return
+
         self.unit.status = ops.MaintenanceStatus("Running archive synchronization")
         try:
             event.log("Running archive synchronization")
