@@ -31,6 +31,7 @@ def test_install_runs_expected_steps_in_order(monkeypatch):
         "_patch_cron_scripts",
         "_ensure_runtime_dirs",
         "_install_debtags_vocabulary",
+        "_install_icons",
         "_link_keyring",
         "_setup_apache",
         "_fix_ownership",
@@ -47,9 +48,23 @@ def test_install_runs_expected_steps_in_order(monkeypatch):
         "_patch_cron_scripts",
         "_ensure_runtime_dirs",
         "_install_debtags_vocabulary",
+        "_install_icons",
         "_link_keyring",
         "_setup_apache",
         "_fix_ownership",
+    ]
+
+
+def test_install_icons_copies_bundled_icons_to_document_root(monkeypatch, tmp_path):
+    copied = []
+    monkeypatch.setattr(packages, "TOPDIR", tmp_path)
+    monkeypatch.setattr(packages.shutil, "copy", lambda src, dst: copied.append((src, dst)))
+    manager = PackagesManager()
+
+    manager._install_icons()
+
+    assert copied == [
+        (packages.ICONS_DIR / icon, tmp_path / "www" / icon) for icon in packages.ICONS
     ]
 
 

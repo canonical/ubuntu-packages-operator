@@ -97,6 +97,11 @@ RUNTIME_DIRS = [
 # empty placeholder on a fresh install for Apache to start.
 CHANGELOGS_MAP = TOPDIR / "files" / "changelogs-map"
 
+# Site icons bundled with the charm, served from the document root where
+# browsers look for them by default.
+ICONS_DIR = Path("src/icons")
+ICONS = ["favicon.ico"]
+
 
 class PackagesManager:
     """Drive the packages.ubuntu.com workload on the unit."""
@@ -283,6 +288,16 @@ class PackagesManager:
         shutil.copy("src/vocabulary", vocab_dest)
         shutil.chown(vocab_dest, RUN_USER, RUN_GROUP)
 
+    def _install_icons(self):
+        """Install the bundled site icons into the document root.
+
+        The files are copied on every install and upgrade so icon updates
+        shipped with the charm reach the site. The daily sync (ttree) only adds
+        files to www/, so it leaves these in place.
+        """
+        for icon in ICONS:
+            shutil.copy(ICONS_DIR / icon, TOPDIR / "www" / icon)
+
     def install(self):
         """Install dependencies, check out the source and configure Apache."""
         self._install_packages()
@@ -292,6 +307,7 @@ class PackagesManager:
         self._patch_cron_scripts()
         self._ensure_runtime_dirs()
         self._install_debtags_vocabulary()
+        self._install_icons()
         self._link_keyring()
         self._setup_apache()
         self._fix_ownership()
