@@ -68,6 +68,61 @@ def test_install_icons_copies_bundled_icons_to_document_root(monkeypatch, tmp_pa
     ]
 
 
+def test_fix_cache_ownership_chowns_cache_recursively(monkeypatch, tmp_path):
+    runs = []
+    monkeypatch.setattr(packages, "TOPDIR", tmp_path)
+    monkeypatch.setattr(PackagesManager, "_run", lambda self, args, cwd=None: runs.append(args))
+
+    manager = PackagesManager()
+    manager._fix_cache_ownership()
+
+    cache_dir = tmp_path / "cache"
+    apache_owner = f"{packages.APACHE_USER}:{packages.APACHE_USER}"
+    assert cache_dir.is_dir()
+    assert runs == [["chown", "-R", apache_owner, str(cache_dir)]]
+    assert (cache_dir.stat().st_mode & 0o7777) == 0o2770
+
+
+def test_ensure_runtime_dirs_fixes_cache_ownership_recursively(monkeypatch, tmp_path):
+    monkeypatch.setattr(packages, "TOPDIR", tmp_path)
+    monkeypatch.setattr(packages, "CHANGELOGS_MAP", tmp_path / "files" / "changelogs-map")
+    monkeypatch.setattr(packages, "RUNTIME_DIRS", [tmp_path / "www", tmp_path / "files"])
+    calls = []
+    monkeypatch.setattr(
+        PackagesManager, "_fix_cache_ownership", lambda self: calls.append("_fix_cache_ownership")
+    )
+
+    manager = PackagesManager()
+    manager._ensure_runtime_dirs()
+
+    assert calls == ["_fix_cache_ownership"]
+    assert (tmp_path / "files" / "changelogs-map").is_file()
+
+
+def test_fix_ownership_recursively_restores_cache_ownership_after_topdir_chown(
+    monkeypatch, tmp_path
+):
+    """A stale cache subdirectory left owned by RUN_USER must become writable by Apache again.
+
+    This guards against a past regression where `chown -R` over TOPDIR flipped
+    nested, previously Apache-owned, compiled-template directories under cache/
+    to RUN_USER, while only the top-level cache/ directory was restored
+    afterwards -- leaving Apache unable to write new compiled templates.
+    """
+    monkeypatch.setattr(packages, "TOPDIR", tmp_path)
+    runs = []
+    monkeypatch.setattr(PackagesManager, "_run", lambda self, args, cwd=None: runs.append(args))
+
+    manager = PackagesManager()
+    manager._fix_ownership()
+
+    cache_dir = tmp_path / "cache"
+    assert runs == [
+        ["chown", "-R", f"{packages.RUN_USER}:{packages.RUN_GROUP}", str(tmp_path)],
+        ["chown", "-R", f"{packages.APACHE_USER}:{packages.APACHE_USER}", str(cache_dir)],
+    ]
+
+
 def test_run_setup_site_ignores_benign_exit_code(monkeypatch):
     monkeypatch.setattr(packages.subprocess, "run", lambda *a, **k: None)
     monkeypatch.setattr(packages.Path, "is_file", lambda self: True)

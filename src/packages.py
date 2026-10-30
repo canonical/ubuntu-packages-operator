@@ -226,6 +226,21 @@ class PackagesManager:
         if "%TOPDIR%" in config_sh.read_text(encoding="utf-8"):
             raise SetupSiteError("setup-site did not substitute placeholders in config.sh")
 
+    def _fix_cache_ownership(self):
+        """Recursively give the cache directory to the Apache worker user.
+
+        Template Toolkit mirrors the full template path under this directory
+        (e.g. cache/srv/packages.ubuntu.com/templates/html/...), so a shallow
+        chown of just the top-level cache directory is not enough: any
+        subdirectories or compiled templates left behind by a previous chown
+        -R of TOPDIR (see _fix_ownership) would otherwise stay owned by
+        RUN_USER and become unwritable for Apache.
+        """
+        cache_dir = TOPDIR / "cache"
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        self._run(["chown", "-R", f"{APACHE_USER}:{APACHE_USER}", str(cache_dir)])
+        cache_dir.chmod(0o2770)
+
     def _ensure_runtime_dirs(self):
         """Create the runtime directories and the Apache-writable cache."""
         for directory in RUNTIME_DIRS:
@@ -235,11 +250,7 @@ class PackagesManager:
         if not CHANGELOGS_MAP.exists():
             CHANGELOGS_MAP.touch()
 
-        cache_dir = TOPDIR / "cache"
-        cache_dir.mkdir(parents=True, exist_ok=True)
-        # The cache must be writable by the Apache worker processes.
-        shutil.chown(cache_dir, APACHE_USER, APACHE_USER)
-        cache_dir.chmod(0o2770)
+        self._fix_cache_ownership()
 
     def _link_keyring(self):
         """Point the application at the system Debian archive keyring."""
@@ -260,10 +271,9 @@ class PackagesManager:
     def _fix_ownership(self):
         """Give the checkout to the run user, keeping the cache for Apache."""
         self._run(["chown", "-R", f"{RUN_USER}:{RUN_GROUP}", str(TOPDIR)])
-        cache_dir = TOPDIR / "cache"
-        if cache_dir.is_dir():
-            shutil.chown(cache_dir, APACHE_USER, APACHE_USER)
-            cache_dir.chmod(0o2770)
+        # The chown -R above also reassigns any compiled-template subdirectories
+        # under cache/ that Apache previously owned, so restore them recursively.
+        self._fix_cache_ownership()
 
     def _install_debtags_vocabulary(self):
         """Install the debtags vocabulary file from the bundled copy if not present.
